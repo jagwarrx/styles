@@ -1,0 +1,273 @@
+
+body.sb-dragging-active {
+    user-select: none !important;
+    -webkit-user-select: none !important;
+}
+
+#sb-journal-root {
+    position: fixed;
+    width: 210px;
+    z-index: 100;
+    font-family: -apple-system, "SF Pro Display", "Helvetica Neue", system-ui, sans-serif !important;
+    font-size: 13px !important;
+    -webkit-font-smoothing: antialiased !important;
+    user-select: none;
+    touch-action: none;
+    transform-origin: 50% 8%;
+    will-change: transform, opacity;
+}
+
+#sb-journal-root * {
+    font-family: -apple-system, "SF Pro Display", system-ui, sans-serif !important;
+    font-variant-numeric: tabular-nums !important;
+}
+
+#sb-journal-root.jc-animate-in {
+    animation: jc-implode-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+#sb-journal-root.jc-animate-out {
+    animation: jc-implode-out 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+@keyframes jc-implode-in {
+    0%   { transform: scale(0); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+@keyframes jc-implode-out {
+    0%   { transform: scale(1); opacity: 1; }
+    100% { transform: scale(0); opacity: 0; }
+}
+
+/* ── Dark theme ── */
+html[data-theme="dark"] #sb-journal-root {
+    --jc-background: #2b2b2d;
+    --jc-border-color: rgba(255,255,255,0.2);
+    --jc-hover-background: rgba(255,255,255,0.1);
+    --jc-text-color: #e5e5e5;
+    --jc-muted-text: #777;
+    --jc-neighbor-text: #555;
+    --jc-accent-color: #3B82F6;
+    --jc-month-outline: rgba(255,255,255,0.35);
+    --jc-has-entry: #e5e5e5;
+}
+
+/* ── Light theme ── */
+html[data-theme="light"] #sb-journal-root {
+    --jc-background: #fafafa;
+    --jc-border-color: rgba(0,0,0,0.18);
+    --jc-hover-background: rgba(0,0,0,0.06);
+    --jc-text-color: #1a1a1a;
+    --jc-muted-text: #999;
+    --jc-neighbor-text: #ccc;
+    --jc-accent-color: #2862CF;
+    --jc-month-outline: rgba(0,0,0,0.55);
+    --jc-has-entry: #1a1a1a;
+}
+
+/* ── Card ── */
+.jc-card {
+    background: var(--jc-background);
+    color: var(--jc-text-color);
+    border-radius: 14px;
+    border: 2px solid var(--jc-border-color);
+    box-shadow: none;
+    overflow: visible;
+    display: flex;
+    flex-direction: column;
+    cursor: grab;
+    padding: 4px 0 6px;
+}
+
+/* ── Header (centered) ── */
+.jc-header {
+    padding: 0 10px 3px;
+    cursor: grab;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    position: relative;
+}
+
+.jc-month-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--jc-text-color);
+    cursor: pointer;
+    padding: 0 2px;
+}
+.jc-month-label:hover {
+    color: var(--jc-accent-color);
+}
+
+.jc-nav-btn {
+    background: transparent;
+    color: var(--jc-muted-text);
+    border: none;
+    border-radius: 4px;
+    padding: 1px 4px;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 700;
+    opacity: 0.6;
+}
+.jc-nav-btn:hover {
+    opacity: 1;
+    color: var(--jc-text-color);
+}
+
+.jc-close {
+    position: absolute;
+    right: 10px;
+    background: transparent;
+    color: var(--jc-muted-text);
+    border: none;
+    border-radius: 4px;
+    padding: 0 3px;
+    cursor: pointer;
+    font-size: 0.8em;
+    line-height: 1;
+    opacity: 0.4;
+}
+.jc-close:hover {
+    opacity: 1;
+    background: oklch(0.65 0.2 30);
+    color: white;
+}
+
+#sb-journal-root.ctrl-active .jc-day {
+    cursor: copy !important;
+}
+
+/* ── Grid base ── */
+.jc-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0;
+}
+
+/* ── Labels ── */
+#jc-labels {
+    padding: 0 12px 1px;
+}
+
+.jc-lbl {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--jc-muted-text);
+    text-align: center;
+    padding: 0;
+}
+
+/* ── Days container with SVG overlay ── */
+.jc-days-container {
+    position: relative;
+    margin: 0 6px;
+    padding: 0 1px;
+}
+
+/* SVG border overlay */
+.jc-border-svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    z-index: 1;
+    overflow: visible;
+}
+
+.jc-border-svg path {
+    fill: none;
+    stroke: var(--jc-month-outline);
+    stroke-width: 2;
+}
+
+/* Days grid inside container */
+.jc-days-container .jc-grid {
+    position: relative;
+    z-index: 0;
+}
+
+/* ── Day cells ── */
+.jc-day {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: -0.2px;
+    height: 20px;
+    border-radius: 3px;
+    cursor: pointer;
+    position: relative;
+    background: transparent;
+    color: var(--jc-muted-text);
+    transition: background 0.1s ease;
+}
+
+/* Neighboring month dates — very faded */
+.jc-day.neighbor {
+    color: var(--jc-neighbor-text);
+    cursor: default;
+    font-weight: 400;
+}
+
+/* Day with journal entry — heavy weight */
+.jc-day.has-entry {
+    color: var(--jc-has-entry);
+    font-weight: 800;
+}
+
+.jc-day:not(.neighbor):hover {
+    background: var(--jc-hover-background);
+}
+
+/* Today — subtle blue fill + outline */
+.jc-day.today {
+    background: color-mix(in srgb, var(--jc-accent-color) 10%, transparent);
+    outline: 1.5px solid var(--jc-accent-color);
+    outline-offset: -1px;
+    border-radius: 2px;
+    font-weight: 700;
+    z-index: 2;
+}
+
+/* Bold day-of-week labels */
+.jc-lbl {
+  font-weight: 700 !important;
+  color: #000 !important;
+}
+
+.jc-day span,
+.jc-lbl {
+  display: block !important;
+  width: 100% !important;
+  text-align: center !important;
+}
+
+#jc-labels {
+  padding: 0 7px !important;
+}
+
+/* Today: blue rounded-square background with white text */
+.jc-day.today {
+  background-color: #4285f4 !important;
+  color: #fff !important;
+  border-radius: 2px !important;
+  margin: 1px 0 !important;
+  padding: 0 2px !important;
+  line-height: 18px !important;
+}
+
+.jc-day.today span {
+  color: #fff !important;
+}
+
+.jc-day.trailing {
+  margin-top: 2px !important;
+}
+
+/* Remove any existing today outline/border style that conflicts */
+.jc-day.today::after,
+.jc-day.today::before {
+  display: none !important;
+}
