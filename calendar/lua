@@ -1,0 +1,399 @@
+-- priority: -1
+config.define("FloatingJournalCalendar", {
+  type = "object",
+  properties = {
+    journalPathPattern = schema.string(),
+    monthNames = { type = "array", items = { type = "string" } },
+    dayNames = { type = "array", items = { type = "string" } },
+    weekStartsSunday = schema.boolean()
+  }
+})
+
+local function quote_list(t)
+    local quoted = {}
+    for i, v in ipairs(t) do
+        quoted[i] = '"' .. v .. '"'
+    end
+    return "[" .. table.concat(quoted, ", ") .. "]"
+end
+
+function toggleFloatingJournalCalendar()
+    local existing_root = js.window.document.getElementById("sb-journal-root")
+    if existing_root then 
+        js.window.eval([[ (el) => {
+            el.classList.add("jc-animate-out");
+            setTimeout(() => el.remove(), 300);
+        }]])(existing_root)
+        return 
+    end
+
+    local cfg = config.get("FloatingJournalCalendar") or {}
+    local path_pattern = cfg.journalPathPattern or 'Journal/#year#/#month#-#monthname#/#year#-#month#-#day#_#weekday#'
+    local month_names = quote_list(cfg.monthNames or {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"})
+    local day_names = quote_list(cfg.dayNames or {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"})
+    local week_starts_sunday = cfg.weekStartsSunday or false
+
+    local all_pages = space.listPages()
+    local page_map_items = {}
+    for _, p in ipairs(all_pages) do
+        table.insert(page_map_items, '"' .. p.name .. '":true')
+    end
+    local existing_pages_json = "{" .. table.concat(page_map_items, ",") .. "}"
+
+    local sessionID = "jc_" .. math.floor(os.time())
+    local saved_top = clientStore.get("jc_pos_top") or "80px"
+    local saved_left = clientStore.get("jc_pos_left") or "auto"
+    
+    local initial_right = "20px"
+    if saved_left ~= "auto" then
+        initial_right = "auto"
+    end
+
+    js.window.addEventListener("sb-journal-event", function(e)
+        if e.detail.session == sessionID then
+            if e.detail.action == "navigate" then
+                local prefix = e.detail.path
+                
+                if e.detail.ctrlKey or e.detail.metaKey then
+                    local sel = editor.getSelection()
+                    if sel and sel.from ~= sel.to then
+                        local selectedText = editor.getText():sub(sel.from + 1, sel.to)
+                        editor.replaceRange(sel.from, sel.to, "[[" .. prefix .. "|" .. selectedText .. "]]")
+                    else
+                        editor.insertAtCursor("[[" .. prefix .. "]]")
+                    end
+                    return
+                end
+
+                local matches = {}
+                local current_pages = space.listPages()
+                for _, p in ipairs(current_pages) do
+                    if p.name:find(prefix, 1, true) == 1 then
+                        table.insert(matches, { name = p.name, value = p.name })
+                    end
+                end
+
+                if #matches > 1 then
+                    local selection = editor.filterBox("Select Journal Entry:", matches, "Multiple entries found for this date.", "Pick a page...")
+                    if selection then
+                        editor.navigate(selection.value)
+                    end
+                else
+                    local final_path = (#matches == 1) and matches[1].value or prefix
+                    editor.navigate(final_path)
+                end
+            elseif e.detail.action == "request-refresh" then
+                refreshCalendarDots()
+            elseif e.detail.action == "save_pos" then
+                clientStore.set("jc_pos_top", e.detail.top)
+                clientStore.set("jc_pos_left", e.detail.left)
+            end
+        end
+    end)
+
+    local container = js.window.document.createElement("div")
+    container.id = "sb-journal-root"
+    container.classList.add("jc-animate-in")
+    container.innerHTML = [[
+    <style>
+      #sb-journal-root {
+        top: ]] .. saved_top .. [[;
+        left: ]] .. saved_left .. [[;
+        right: ]] .. initial_right .. [[;
+      }
+      #sb-journal-root.ctrl-active .jc-day {
+        cursor: copy !important;
+      }
+    </style>
+    <div class="jc-card" id="jc-draggable">
+      <div class="jc-header" id="jc-handle">
+          <button class="jc-nav-btn" id="jc-prev">◀</button>
+          <span class="jc-month-label" id="jc-month-label"></span>
+          <button class="jc-nav-btn" id="jc-next">▶</button>
+          <button class="jc-close" id="jc-close-btn">✕</button>
+      </div>
+      <div class="jc-grid" id="jc-labels"></div>
+      <div class="jc-days-container">
+          <svg class="jc-border-svg" id="jc-border-svg"></svg>
+          <div class="jc-grid" id="jc-days"></div>
+      </div>
+    </div>
+    ]]
+
+    js.window.document.body.appendChild(container)
+
+    local scriptEl = js.window.document.createElement("script")
+    scriptEl.innerHTML = [[
+    (function() {
+        const session = "]]..sessionID..[[";
+        const months = ]]..month_names..[[;
+        const days = ]]..day_names..[[;
+        const weekStartsSunday = ]]..tostring(week_starts_sunday)..[[;
+        let existing = ]]..existing_pages_json..[[;
+        const pattern = "]]..path_pattern..[[";
+        const root = document.getElementById("sb-journal-root");
+        
+        const SNAP = 15;
+        const TOP_OFFSET = 65;
+        const ROW_H = 20;
+        const R = 4;
+        let vDate = new Date();
+
+        window.addEventListener("keydown", (e) => {
+            if (e.ctrlKey || e.metaKey) root.classList.add("ctrl-active");
+        });
+        window.addEventListener("keyup", (e) => {
+            if (!e.ctrlKey && !e.metaKey) root.classList.remove("ctrl-active");
+        });
+
+        function clamp() {
+            const rect = root.getBoundingClientRect();
+            let left = rect.left, top = rect.top;
+            if (left < 0) left = 0;
+            if (top < TOP_OFFSET) top = TOP_OFFSET;
+            if (left + rect.width > window.innerWidth) left = window.innerWidth - rect.width;
+            if (top + rect.height > window.innerHeight) top = window.innerHeight - rect.height;
+            root.style.left = left + "px";
+            root.style.top = top + "px";
+            root.style.right = "auto";
+        }
+
+        function arc(r, s, x, y) {
+            return ' A ' + r + ' ' + r + ' 0 0 ' + s + ' ' + x + ' ' + y;
+        }
+
+        function buildBorderPath(offset, lastDay, totalRows, W) {
+    const colW = W / 7;
+    const H = totalRows * ROW_H;
+    const r = R;
+
+    const totalCells = offset + lastDay;
+    const lastRowCells = totalCells % 7 || 7;
+
+    const PAD = 1;
+    const x0 = -PAD;
+    const x7 = W + PAD;
+    const xOS = offset * colW - PAD;
+    const xLE = lastRowCells * colW + PAD;
+    const y0 = -PAD;
+    const y1 = ROW_H - PAD;
+    const yL = (totalRows - 1) * ROW_H + PAD;
+    const yB = H + PAD;
+
+    let p = '';
+
+    // CASE 1: Simple rectangle
+    if (offset === 0 && lastRowCells === 7) {
+        p  = 'M ' + (x0+r) + ' ' + y0;
+        p += ' H ' + (x7-r) + arc(r, 1, x7, y0+r);
+        p += ' V ' + (yB-r) + arc(r, 1, x7-r, yB);
+        p += ' H ' + (x0+r) + arc(r, 1, x0, yB-r);
+        p += ' V ' + (y0+r) + arc(r, 1, x0+r, y0);
+        return p + ' Z';
+    }
+
+    // CASE 2: Top-left notch only
+    if (offset > 0 && lastRowCells === 7) {
+        p  = 'M ' + (xOS+r) + ' ' + y0;
+        p += ' H ' + (x7-r) + arc(r, 1, x7, y0+r);
+        p += ' V ' + (yB-r) + arc(r, 1, x7-r, yB);
+        p += ' H ' + (x0+r) + arc(r, 1, x0, yB-r);
+        // TL1: outer corner — sweep 1
+        p += ' V ' + (y1+r) + arc(r, 1, x0+r, y1);
+        // TL0: inner corner — sweep 0
+        p += ' H ' + (xOS-r) + arc(r, 0, xOS, y1-r);
+        p += ' V ' + (y0+r) + arc(r, 1, xOS+r, y0);
+        return p + ' Z';
+    }
+
+    // CASE 3: Bottom-right notch only
+    if (offset === 0 && lastRowCells < 7) {
+        p  = 'M ' + (x0+r) + ' ' + y0;
+        p += ' H ' + (x7-r) + arc(r, 1, x7, y0+r);
+        // BR1: outer corner — sweep 1
+        p += ' V ' + (yL-r) + arc(r, 1, x7-r, yL);
+        // BR0: inner corner — sweep 0
+        p += ' H ' + (xLE+r) + arc(r, 0, xLE, yL+r);
+        p += ' V ' + (yB-r) + arc(r, 1, xLE-r, yB);
+        p += ' H ' + (x0+r) + arc(r, 1, x0, yB-r);
+        p += ' V ' + (y0+r) + arc(r, 1, x0+r, y0);
+        return p + ' Z';
+    }
+
+    // CASE 4: Both notches
+    p  = 'M ' + (xOS+r) + ' ' + y0;
+    p += ' H ' + (x7-r) + arc(r, 1, x7, y0+r);
+    // BR1: outer corner — sweep 1
+    p += ' V ' + (yL-r) + arc(r, 1, x7-r, yL);
+    // BR0: inner corner — sweep 0
+    p += ' H ' + (xLE+r) + arc(r, 0, xLE, yL+r);
+    p += ' V ' + (yB-r) + arc(r, 1, xLE-r, yB);
+    p += ' H ' + (x0+r) + arc(r, 1, x0, yB-r);
+    // TL1: outer corner — sweep 1
+    p += ' V ' + (y1+r) + arc(r, 1, x0+r, y1);
+    // TL0: inner corner — sweep 0
+    p += ' H ' + (xOS-r) + arc(r, 0, xOS, y1-r);
+    p += ' V ' + (y0+r) + arc(r, 1, xOS+r, y0);
+    return p + ' Z';
+}
+
+        function render() {
+            const y = vDate.getFullYear(), m = vDate.getMonth();
+            const now = new Date();
+
+            document.getElementById("jc-month-label").textContent = months[m] + " " + y;
+            
+            const displayDays = weekStartsSunday ? [days[6], ...days.slice(0, 6)] : days;
+            document.getElementById("jc-labels").innerHTML = displayDays.map((d) => {
+                return '<div class="jc-lbl">' + d.slice(0, 1) + '</div>';
+            }).join('');
+
+            const grid = document.getElementById("jc-days");
+            grid.innerHTML = "";
+
+            const firstDay = new Date(y, m, 1).getDay();
+            const offset = weekStartsSunday ? firstDay : (firstDay === 0 ? 6 : firstDay - 1);
+            const lastDay = new Date(y, m + 1, 0).getDate();
+            const prevMonthLastDay = new Date(y, m, 0).getDate();
+
+            const pageNames = Object.keys(existing);
+
+            for (let i = offset - 1; i >= 0; i--) {
+                const d = document.createElement("div");
+                d.className = "jc-day neighbor";
+                d.innerHTML = '<span>' + (prevMonthLastDay - i) + '</span>';
+                grid.appendChild(d);
+            }
+
+  
+
+            for (let i = 1; i <= lastDay; i++) {
+                const d = document.createElement("div");
+                d.className = "jc-day";
+                d.draggable = true;
+                const dateObj = new Date(y, m, i);
+                if (i === now.getDate() && m === now.getMonth() && y === now.getFullYear()) d.classList.add("today");
+
+ 
+
+                const basePath = pattern
+                    .replace(/#year#/g, y)
+                    .replace(/#month#/g, String(m+1).padStart(2,'0'))
+                    .replace(/#monthname#/g, months[m])
+                    .replace(/#day#/g, String(i).padStart(2,'0'))
+                    .replace(/#weekday#/g, days[dateObj.getDay() === 0 ? 6 : dateObj.getDay()-1])
+                    .replace(/#wildcard#/g, "");
+
+                const matchCount = pageNames.filter(name => name.startsWith(basePath)).length;
+                if (matchCount > 0) d.classList.add("has-entry");
+                d.innerHTML = '<span>' + i + '</span>';
+                
+                d.onclick = (e) => window.dispatchEvent(new CustomEvent("sb-journal-event", { detail: { action:"navigate", path: basePath, session, ctrlKey: e.ctrlKey, metaKey: e.metaKey }}));
+                d.ondragstart = (e) => {
+                    e.dataTransfer.setData("text/plain", "[[" + basePath + "]" + "]");
+                    e.dataTransfer.dropEffect = "copy";
+                };
+                grid.appendChild(d);
+            }
+
+            const totalCurrentCells = offset + lastDay;
+            const remainder = totalCurrentCells % 7;
+            const trailing = remainder === 0 ? 0 : 7 - remainder;
+            for (let i = 1; i <= trailing; i++) {
+                const d = document.createElement("div");
+                d.className = "jc-day neighbor";
+                d.innerHTML = '<span>' + i + '</span>';
+                grid.appendChild(d);
+            }
+
+            const totalCells = offset + lastDay + trailing;
+            const totalRows = totalCells / 7;
+            if (trailing > 0) {
+                const rows = Array(totalRows).fill(ROW_H + "px");
+                rows[totalRows - 1] = (ROW_H + 6) + "px";
+                grid.style.gridTemplateRows = rows.join(" ");
+            } else {
+                grid.style.gridTemplateRows = "repeat(" + totalRows + ", " + ROW_H + "px)";
+            }
+
+             requestAnimationFrame(() => {
+                const W = grid.offsetWidth;
+                const H = totalRows * ROW_H;
+                const PAD = 2;
+                const svg = document.getElementById("jc-border-svg");
+                svg.setAttribute("width", W + PAD * 2);
+                svg.setAttribute("height", H + PAD * 2);
+                svg.setAttribute("viewBox", (-PAD) + " " + (-PAD) + " " + (W + PAD * 2) + " " + (H + PAD * 2));
+                svg.innerHTML = '<path d="' + buildBorderPath(offset, lastDay, totalRows, W) + '" />';
+            });
+        }
+
+        window.addEventListener("sb-journal-update", (e) => {
+            if (e.detail && e.detail.existing) { existing = e.detail.existing; render(); }
+        });
+
+        window.addEventListener("resize", () => { clamp(); render(); });
+        document.getElementById("jc-prev").onclick = () => { vDate.setDate(1); vDate.setMonth(vDate.getMonth()-1); render(); };
+        document.getElementById("jc-next").onclick = () => { vDate.setDate(1); vDate.setMonth(vDate.getMonth()+1); render(); };
+        
+        document.getElementById("jc-month-label").onclick = () => { 
+            vDate = new Date(); 
+            window.dispatchEvent(new CustomEvent("sb-journal-event", { detail: { action: "request-refresh", session }}));
+            render(); 
+        };
+
+        document.getElementById("jc-close-btn").onclick = () => {
+            root.classList.add("jc-animate-out");
+            setTimeout(() => root.remove(), 300);
+        };
+
+        const card = document.getElementById("jc-draggable");
+        card.onpointerdown = (e) => {
+            if (e.target.closest("button, select, input, textarea") || e.target.closest(".jc-day:not(.neighbor)")) return;
+            document.body.classList.add("sb-dragging-active");
+            let sX = e.clientX - root.offsetLeft, sY = e.clientY - root.offsetTop;
+            const move = (m) => {
+                let nL = m.clientX - sX, nT = m.clientY - sY;
+                const w = root.offsetWidth, h = root.offsetHeight;
+                if (nL < SNAP) nL = 0;
+                if (nT < TOP_OFFSET + SNAP) nT = TOP_OFFSET;
+                if (nL + w > window.innerWidth - SNAP) nL = window.innerWidth - w;
+                if (nT + h > window.innerHeight - SNAP) nT = window.innerHeight - h;
+                root.style.left = Math.max(0, Math.min(nL, window.innerWidth - w)) + "px";
+                root.style.top = Math.max(TOP_OFFSET, Math.min(nT, window.innerHeight - h)) + "px";
+                root.style.right = "auto";
+            };
+            const up = () => {
+                document.body.classList.remove("sb-dragging-active");
+                window.removeEventListener("pointermove", move);
+                window.dispatchEvent(new CustomEvent("sb-journal-event", { detail: { action:"save_pos", top:root.style.top, left:root.style.left, session }}));
+            };
+            window.addEventListener("pointermove", move);
+            window.addEventListener("pointerup", up, {once:true});
+        };
+
+        render();
+        setTimeout(() => { if (root.style.left !== "auto") root.style.right = "auto"; }, 100);
+    })();
+    ]]
+    container.appendChild(scriptEl)
+end
+
+function refreshCalendarDots()
+    local existing_root = js.window.document.getElementById("sb-journal-root")
+    if not existing_root then return end
+    local all_pages = space.listPages()
+    local page_map_items = {}
+    for _, p in ipairs(all_pages) do
+        table.insert(page_map_items, '"' .. p.name .. '":true')
+    end
+    local json_str = "{" .. table.concat(page_map_items, ",") .. "}"
+    js.window.dispatchEvent(js.window.eval([[ (data) => new CustomEvent("sb-journal-update", { detail: { existing: data } }) ]])(js.window.JSON.parse(json_str)))
+end
+
+event.listen { name = "editor:pageLoaded", run = function() refreshCalendarDots() end }
+
+command.define {
+    name = "Journal: Floating Calendar",
+    run = function() toggleFloatingJournalCalendar() end
+}
