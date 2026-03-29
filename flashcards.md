@@ -1,8 +1,6 @@
-
 ---
 name: "Library/jagwarrx/Flashcards"
 tags: meta/library
-pageDecoration.prefix: "🃏 "
 share.uri: "github:jagwarrx/styles/flashcards.md"
 share.hash: 0000000
 share.mode: pull
