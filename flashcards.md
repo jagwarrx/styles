@@ -16,14 +16,14 @@ A minimal flashcard extension for SilverBullet. Parses any page for Q&A pairs an
 
 ## Features
 
-* **Flip:** Click card or ↑↓ arrow keys to flip between question and answer
-* **Navigate:** ←→ arrow keys or ◀▶ buttons to move between cards
-* **Shuffle:** ⟳ button to randomize deck order
-* **Drag:** Grab the header to reposition anywhere on screen (remembers position)
-* **Resize:** Drag the bottom edge to adjust card height (remembers height)
-* **Markdown:** Supports **bold**, *italic*, and ==highlighted== text in answers
-* **Paragraphs:** Empty lines in answers are preserved as paragraph spacing
-* **Theming:** Built-in support for both Dark and Light modes
+- **Flip:** Click card or ↑↓ arrow keys to flip between question and answer
+- **Navigate:** ←→ arrow keys or ◀▶ buttons to move between cards
+- **Shuffle:** ⟳ button to randomize deck order
+- **Drag:** Grab the header to reposition anywhere on screen (remembers position)
+- **Resize:** Drag the bottom edge to adjust card height (remembers height)
+- **Markdown:** Supports **bold**, *italic*, and ==highlighted== text in answers
+- **Paragraphs:** Empty lines in answers are preserved as paragraph spacing
+- **Theming:** Built-in support for both Dark and Light modes
 
 ## How to Use
 
@@ -35,15 +35,13 @@ Questions start with `**Q: ...**` (bold) or plain `Q: ...` at the beginning of a
 
 ### Controls
 
-| Action | Control |
-|---|---|
-| Flip card | Click card / ↑ / ↓ |
-| Next card | ▶ button / → |
-| Previous card | ◀ button / ← |
-| Shuffle deck | ⟳ button |
-| Move widget | Drag header |
-| Resize height | Drag bottom edge |
-| Close | ✕ button |
+- **Flip card** — Click card / ↑ / ↓
+- **Next card** — ▶ button / →
+- **Previous card** — ◀ button / ←
+- **Shuffle deck** — ⟳ button
+- **Move widget** — Drag header
+- **Resize height** — Drag bottom edge
+- **Close** — ✕ button
 
 ## Implementation
 
