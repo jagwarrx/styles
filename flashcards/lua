@@ -1,0 +1,238 @@
+-- priority: -1
+
+function toggleFlashcards()
+    local existing = js.window.document.getElementById("sb-flashcard-root")
+    if existing then
+        existing.remove()
+        return
+    end
+
+    local txt = tostring(editor.getText())
+    local cards_json_items = {}
+    local lines = {}
+    for line in string.gmatch(txt .. "\n", "(.-)\n") do
+        table.insert(lines, line)
+    end
+
+    local i = 1
+    local total = 0
+    for _ in ipairs(lines) do total = total + 1 end
+
+    while i <= total do
+        local line = lines[i]
+        local q = string.match(line, "%*%*Q:%s*(.-)%*%*")
+        if not q then
+            q = string.match(line, "Q:%s*(.+)")
+        end
+
+        if q then
+            local answer_parts = {}
+            local j = i + 1
+            while j <= total do
+                local next_line = lines[j]
+                if string.match(next_line, "%*%*Q:") or string.match(next_line, "^Q:") then
+                    break
+                end
+                if string.match(next_line, "^%-%-%-") then
+                    break
+                end
+                if string.len(next_line) > 0 or #answer_parts > 0 then
+                    table.insert(answer_parts, next_line)
+                end
+                j = j + 1
+            end
+
+            local cleaned_parts = {}
+            local prev_empty = false
+            for _, part in ipairs(answer_parts) do
+                if string.len(part) == 0 then
+                    if not prev_empty then
+                        table.insert(cleaned_parts, "</p><p>")
+                    end
+                    prev_empty = true
+                else
+                    prev_empty = false
+                    table.insert(cleaned_parts, part)
+                end
+            end
+            local a = "<p>" .. table.concat(cleaned_parts, " ") .. "</p>"
+            a = string.gsub(a, "%s+$", "")
+
+            if string.len(q) > 0 and string.len(a) > 0 then
+                q = string.gsub(q, "%*%*", "")
+                q = string.gsub(q, "==", "")
+                q = string.gsub(q, '"', '\\"')
+
+                a = string.gsub(a, "%*%*(.-)%*%*", "<b>%1</b>")
+                a = string.gsub(a, "%*(.-)%*", "<i>%1</i>")
+                a = string.gsub(a, "==(.-)==", "<mark>%1</mark>")
+                a = string.gsub(a, '"', '\\"')
+
+                table.insert(cards_json_items, '{"q":"' .. q .. '","a":"' .. a .. '"}')
+            end
+            i = j
+        else
+            i = i + 1
+        end
+    end
+
+    local count = 0
+    for _ in ipairs(cards_json_items) do count = count + 1 end
+
+    if count == 0 then
+        editor.flashNotification("No flashcard blocks found.", "error")
+        return
+    end
+
+    local cards_json = "[" .. table.concat(cards_json_items, ",") .. "]"
+
+    local saved_top = clientStore.get("fc_pos_top") or "80px"
+    local saved_left = clientStore.get("fc_pos_left") or "auto"
+    local initial_right = "20px"
+    if saved_left ~= "auto" then
+        initial_right = "auto"
+    end
+    local saved_height = clientStore.get("fc_height") or "140"
+
+    local container = js.window.document.createElement("div")
+    container.id = "sb-flashcard-root"
+    container.style.cssText = "position:fixed;z-index:101;width:390px;--fc-height:" .. saved_height .. "px;"
+        .. "top:" .. saved_top .. ";left:" .. saved_left .. ";right:" .. initial_right .. ";"
+
+    container.innerHTML = '<div class="fc-card">'
+        .. '<div class="fc-header" id="fc-handle">'
+        .. '<span class="fc-header-label">Flashcards</span>'
+        .. '<button class="fc-close" id="fc-close-btn">✕</button>'
+        .. '</div>'
+        .. '<div class="fc-body" id="fc-body">'
+        .. '<div id="fc-text"></div>'
+        .. '</div>'
+        .. '<div class="fc-footer">'
+        .. '<button class="fc-nav-sm" id="fc-prev">◀</button>'
+        .. '<span class="fc-counter" id="fc-header-label">1 / 1</span>'
+        .. '<button class="fc-nav-sm" id="fc-next">▶</button>'
+        .. '<button class="fc-shuffle" id="fc-shuffle" title="Shuffle all">⟳</button>'
+        .. '</div>'
+        .. '<div id="fc-resize" style="height:6px;cursor:ns-resize;display:flex;justify-content:center;align-items:center;opacity:0.3;"><div style="width:40px;height:2px;background:var(--fc-dim,#999);border-radius:1px;"></div></div>'
+        .. '</div>'
+
+    js.window.document.body.appendChild(container)
+
+    local scriptEl = js.window.document.createElement("script")
+    scriptEl.textContent = '(function(){'
+        .. 'var cards=' .. cards_json .. ';'
+        .. 'var root=document.getElementById("sb-flashcard-root");'
+        .. 'var body=document.getElementById("fc-body");'
+        .. 'var txt=document.getElementById("fc-text");'
+        .. 'var label=document.getElementById("fc-header-label");'
+        .. 'var prevBtn=document.getElementById("fc-prev");'
+        .. 'var nextBtn=document.getElementById("fc-next");'
+        .. 'var SNAP=15,TOP_OFFSET=60,idx=0,flipped=false;'
+        .. 'function render(){'
+        .. 'var c=cards[idx];flipped=false;'
+        .. 'body.innerHTML="<div id=fc-text style=\\"padding:8px 20px\\">"+c.q+"</div>";'
+        .. 'txt=document.getElementById("fc-text");'
+        .. 'body.classList.remove("is-back");'
+        .. 'body.classList.add("is-centered");'
+        .. 'label.textContent=(idx+1)+" / "+cards.length;'
+        .. 'prevBtn.disabled=idx===0;'
+        .. 'nextBtn.disabled=idx===cards.length-1;'
+        .. '}'
+        .. 'body.onclick=function(){'
+        .. 'flipped=!flipped;var c=cards[idx];'
+        .. 'body.innerHTML="<div id=fc-text style=\\"padding:8px 20px\\">"+(flipped?c.a:c.q)+"</div>";'
+        .. 'txt=document.getElementById("fc-text");'
+        .. 'if(flipped){body.classList.add("is-back");body.classList.remove("is-centered")}'
+        .. 'else{body.classList.remove("is-back");body.classList.add("is-centered")}'
+        .. '};'
+        .. 'prevBtn.onclick=function(e){e.stopPropagation();if(idx>0){idx--;render()}};'
+        .. 'nextBtn.onclick=function(e){e.stopPropagation();if(idx<cards.length-1){idx++;render()}};'
+        .. 'document.getElementById("fc-shuffle").onclick=function(e){e.stopPropagation();'
+        .. 'for(var i=cards.length-1;i>0;i--){'
+        .. 'var j=Math.floor(Math.random()*(i+1));'
+        .. 'var tmp=cards[i];cards[i]=cards[j];cards[j]=tmp;'
+        .. '}'
+        .. 'idx=0;render();'
+        .. '};'
+        .. 'var curH=parseInt("' .. saved_height .. '");'
+        .. 'document.getElementById("fc-resize").onpointerdown=function(e){'
+        .. 'e.preventDefault();e.stopPropagation();'
+        .. 'var startY=e.clientY,startH=body.offsetHeight;'
+        .. 'function onmove(m){'
+        .. 'var newH=Math.max(80,Math.min(500,startH+(m.clientY-startY)));'
+        .. 'root.style.setProperty("--fc-height",newH+"px");'
+        .. 'curH=newH;'
+        .. '}'
+        .. 'function onup(){'
+        .. 'window.removeEventListener("pointermove",onmove);'
+        .. 'window.__fc_height=curH;'
+        .. '}'
+        .. 'window.addEventListener("pointermove",onmove);'
+        .. 'window.addEventListener("pointerup",onup,{once:true});'
+        .. '};'
+        .. 'document.addEventListener("keydown",function(e){'
+        .. 'if(!root.parentNode)return;'
+        .. 'if(e.key==="ArrowLeft"&&idx>0){idx--;render()}'
+        .. 'if(e.key==="ArrowRight"&&idx<cards.length-1){idx++;render()}'
+        .. 'if(e.key==="ArrowUp"||e.key==="ArrowDown"){e.preventDefault();'
+        .. 'flipped=!flipped;var c=cards[idx];'
+        .. 'body.innerHTML="<div id=fc-text style=\\"padding:8px 20px\\">"+(flipped?c.a:c.q)+"</div>";'
+        .. 'txt=document.getElementById("fc-text");'
+        .. 'if(flipped){body.classList.add("is-back");body.classList.remove("is-centered")}'
+        .. 'else{body.classList.remove("is-back");body.classList.add("is-centered")}'
+        .. '}'
+        .. '});'
+        .. 'document.getElementById("fc-close-btn").onclick=function(e){e.stopPropagation();root.remove()};'
+        .. 'function clamp(){'
+        .. 'var rect=root.getBoundingClientRect();'
+        .. 'var l=rect.left,t=rect.top;'
+        .. 'if(l<0)l=0;if(t<TOP_OFFSET)t=TOP_OFFSET;'
+        .. 'if(l+rect.width>window.innerWidth)l=window.innerWidth-rect.width;'
+        .. 'if(t+rect.height>window.innerHeight)t=window.innerHeight-rect.height;'
+        .. 'root.style.left=l+"px";root.style.top=t+"px";root.style.right="auto";'
+        .. '}'
+        .. 'document.getElementById("fc-handle").onpointerdown=function(e){'
+        .. 'if(e.target.closest("button"))return;'
+        .. 'document.body.classList.add("sb-dragging-active");'
+        .. 'var sX=e.clientX-root.offsetLeft,sY=e.clientY-root.offsetTop;'
+        .. 'function move(m){'
+        .. 'var nL=m.clientX-sX,nT=m.clientY-sY;'
+        .. 'var w=root.offsetWidth,h=root.offsetHeight;'
+        .. 'if(nL<SNAP)nL=0;if(nT<TOP_OFFSET+SNAP)nT=TOP_OFFSET;'
+        .. 'if(nL+w>window.innerWidth-SNAP)nL=window.innerWidth-w;'
+        .. 'if(nT+h>window.innerHeight-SNAP)nT=window.innerHeight-h;'
+        .. 'root.style.left=Math.max(0,Math.min(nL,window.innerWidth-w))+"px";'
+        .. 'root.style.top=Math.max(TOP_OFFSET,Math.min(nT,window.innerHeight-h))+"px";'
+        .. 'root.style.right="auto";'
+        .. '}'
+        .. 'function up(){'
+        .. 'document.body.classList.remove("sb-dragging-active");'
+        .. 'window.removeEventListener("pointermove",move);'
+        .. 'window.__fc_pos={top:root.style.top,left:root.style.left};'
+        .. '}'
+        .. 'window.addEventListener("pointermove",move);'
+        .. 'window.addEventListener("pointerup",up,{once:true});'
+        .. '};'
+        .. 'window.addEventListener("resize",clamp);'
+        .. 'render();setTimeout(clamp,50);'
+        .. '})();'
+
+    container.appendChild(scriptEl)
+end
+
+js.window.addEventListener("beforeunload", function()
+    local pos = js.window.__fc_pos
+    if pos then
+        clientStore.set("fc_pos_top", tostring(pos.top))
+        clientStore.set("fc_pos_left", tostring(pos.left))
+    end
+    local h = js.window.__fc_height
+    if h then
+        clientStore.set("fc_height", tostring(h))
+    end
+end)
+
+command.define {
+    name = "Flashcards: Start",
+    run = function() toggleFlashcards() end
+}
