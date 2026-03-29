@@ -35,7 +35,6 @@ Run the `Flashcards: Start` command on any page containing Q&A data.
 
 Questions start with `**Q: ...**` (bold) or plain `Q: ...` at the beginning of a line. Everything below until the next question or a `---` horizontal rule becomes the answer.
 
----
 
 ### Controls
 
