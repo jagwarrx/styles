@@ -1,0 +1,139 @@
+body.sb-dragging-active {
+    user-select: none !important;
+    -webkit-user-select: none !important;
+}
+
+#sb-flashcard-root {
+    position: fixed;
+    width: 390px;
+    z-index: 101;
+    font-family: -apple-system, "SF Pro Display", "Helvetica Neue", system-ui, sans-serif !important;
+    font-size: 13px !important;
+    -webkit-font-smoothing: antialiased !important;
+    user-select: none;
+    touch-action: none;
+}
+
+#sb-flashcard-root * {
+    font-family: -apple-system, "SF Pro Display", system-ui, sans-serif !important;
+}
+
+html[data-theme="dark"] #sb-flashcard-root {
+    --fc-bg: #2b2b2d;
+    --fc-border: rgba(255,255,255,0.2);
+    --fc-text: #e5e5e5;
+    --fc-dim: #777;
+    --fc-accent: #3B82F6;
+    --fc-hover: rgba(255,255,255,0.1);
+    --fc-back-bg: #333;
+}
+
+html[data-theme="light"] #sb-flashcard-root {
+    --fc-bg: #fafafa;
+    --fc-border: rgba(0,0,0,0.18);
+    --fc-text: #1a1a1a;
+    --fc-dim: #999;
+    --fc-accent: #2862CF;
+    --fc-hover: rgba(0,0,0,0.06);
+    --fc-back-bg: #f0f0f0;
+}
+
+.fc-card {
+    background: var(--fc-bg);
+    color: var(--fc-text);
+    border-radius: 14px;
+    border: 2px solid var(--fc-border);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.fc-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 10px;
+    cursor: grab;
+    position: relative;
+    gap: 6px;
+}
+
+.fc-header-label { font-size: 13px; font-weight: 700; color: var(--fc-text); }
+
+.fc-close {
+    position: absolute;
+    right: 10px;
+    background: transparent;
+    color: var(--fc-dim);
+    border: none;
+    border-radius: 4px;
+    padding: 0 3px;
+    cursor: pointer;
+    font-size: 0.8em;
+    line-height: 1;
+    opacity: 0.4;
+}
+.fc-close:hover { opacity: 1; background: oklch(0.65 0.2 30); color: white; }
+
+.fc-nav-sm {
+    background: transparent;
+    color: var(--fc-dim);
+    border: none;
+    border-radius: 4px;
+    padding: 1px 4px;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 700;
+    opacity: 0.6;
+}
+.fc-nav-sm:hover { opacity: 1; color: var(--fc-text); }
+.fc-nav-sm:disabled { opacity: 0.2; cursor: default; }
+
+.fc-body {
+    height: var(--fc-height, 140px);
+    padding: 0;
+    text-align: center;
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1.5;
+    transition: background 0.2s ease;
+    border-top: 1px solid var(--fc-border);
+    border-bottom: 1px solid var(--fc-border);
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.fc-body:hover { background: var(--fc-hover); }
+.fc-body.is-back { background: var(--fc-back-bg); text-align: left; }
+.fc-body.is-centered { display: flex; align-items: center; justify-content: center; }
+
+#fc-text p { margin: 0 0 10px 0; }
+#fc-text p:last-child { margin-bottom: 0; }
+
+#sb-flashcard-root mark {
+    background: rgba(255, 213, 79, 0.3);
+    padding: 1px 3px;
+    border-radius: 2px;
+}
+
+.fc-footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 10px;
+    gap: 8px;
+}
+
+.fc-counter { font-size: 11px; color: var(--fc-dim); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.fc-shuffle {
+    background: transparent;
+    border: none;
+    color: var(--fc-dim);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 1px 4px;
+    border-radius: 4px;
+    opacity: 0.5;
+}
+.fc-shuffle:hover { opacity: 1; color: var(--fc-accent); }
