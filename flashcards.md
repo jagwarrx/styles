@@ -6,7 +6,7 @@ share.hash: 0000000
 share.mode: pull
 ---
 
-# Floating Flashcards
+# Simple Flashcards
 
 A minimal flashcard extension for SilverBullet. Parses any page for Q&A pairs and presents them in a floating, draggable card with flip, shuffle, keyboard navigation, and drag-to-resize.
 
