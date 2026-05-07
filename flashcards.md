@@ -262,6 +262,7 @@ function toggleFlashcards()
                   q = string.gsub(q, "%$(.-)%$", function(x)
                       return latex.inline(x).html
                   end)
+                  q = string.gsub(q, "\n", "\\n")
                 end
                 q = string.gsub(q, '"', '\\"')
 
@@ -275,6 +276,7 @@ function toggleFlashcards()
                   a = string.gsub(a, "%$(.-)%$", function(x)
                     return latex.inline(x).html
                   end)
+                  a = string.gsub(a, "\n", "\\n")
                 end
                 a = string.gsub(a, '"', '\\"')
 
