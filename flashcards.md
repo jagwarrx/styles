@@ -255,11 +255,29 @@ function toggleFlashcards()
             if string.len(q) > 0 and string.len(a) > 0 then
                 q = string.gsub(q, "%*%*", "")
                 q = string.gsub(q, "==", "")
+                if latex ~= nil then
+                  q = string.gsub(q, "%$%$%s*(.-)%s*%$%$", function(x)
+                    return latex.block(x).html
+                  end)
+                  q = string.gsub(q, "%$(.-)%$", function(x)
+                      return latex.inline(x).html
+                  end)
+                  q = string.gsub(q, "\n", "\\n")
+                end
                 q = string.gsub(q, '"', '\\"')
 
                 a = string.gsub(a, "%*%*(.-)%*%*", "<b>%1</b>")
                 a = string.gsub(a, "%*(.-)%*", "<i>%1</i>")
                 a = string.gsub(a, "==(.-)==", "<mark>%1</mark>")
+                if latex ~= nil then
+                  a = string.gsub(a, "%$%$%s*(.-)%s*%$%$", function(x)
+                    return latex.block(x).html
+                  end)
+                  a = string.gsub(a, "%$(.-)%$", function(x)
+                    return latex.inline(x).html
+                  end)
+                  a = string.gsub(a, "\n", "\\n")
+                end
                 a = string.gsub(a, '"', '\\"')
 
                 table.insert(cards_json_items, '{"q":"' .. q .. '","a":"' .. a .. '"}')
